@@ -14,7 +14,8 @@ import {
   Shield,
   ChevronLeft,
   ChevronRight,
-  LogOut
+  LogOut,
+  Newspaper
 } from "lucide-react";
 import { signOut } from "next-auth/react";
 
@@ -23,6 +24,7 @@ const navItems = [
   { name: "New Analysis", href: "/dashboard/analyze", icon: Scan },
   { name: "My Cases", href: "/dashboard/cases", icon: FolderKanban },
   { name: "Analytics", href: "/dashboard/analytics", icon: BarChart3 },
+  { name: "Live Updates", href: "/dashboard/news", icon: Newspaper },
 ];
 
 const bottomItems = [

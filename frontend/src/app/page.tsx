@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import TopNav from "@/components/navigation/TopNav";
+import NewsHighlights from "@/components/landing/NewsHighlights";
 import ParticleNetwork from "@/components/background/ParticleNetwork";
 import AuroraBackground from "@/components/background/AuroraBackground";
 import HeroSection from "@/components/hero/HeroSection";
@@ -44,6 +45,7 @@ export default function Home() {
       {/* Content */}
       <div className="relative z-10">
         <TopNav />
+        <NewsHighlights />
         
         <HeroSection />
         <FeaturesSection />
