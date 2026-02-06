@@ -47,3 +47,16 @@ dist
 build
 __pycache__
 venv
+
+# backend runtime files
+backend/uploads
+backend/uploads/**
+backend/utils/__pycache__
+backend/utils/__pycache__/**
+
+# temp folders
+temp_backend_clone
+
+# node
+node_modules
+backend/node_modules

@@ -22,6 +22,7 @@ import {
   MessageSquare
 } from "lucide-react";
 import { useDropzone } from "react-dropzone";
+import { analyzeImage, analyzeVideo, analyzeAudio, analyzeDocument } from "@/lib/api";
 
 const analysisTypes = [
   { id: "image", label: "Image Forensics", icon: ImageIcon, desc: "Detect manipulation, deepfakes, and metadata analysis" },
@@ -72,28 +73,102 @@ export default function AnalyzePage() {
     setFiles(prev => prev.filter((_, i) => i !== index));
   };
 
+  /* eslint-disable @typescript-eslint/no-unused-vars */
+  /* eslint-disable @typescript-eslint/no-explicit-any */
   const startAnalysis = async () => {
+    if (files.length === 0 && selectedType !== "text" && selectedType !== "email") return;
+
     setIsAnalyzing(true);
     setCurrentStep(1);
-    
-    // Simulate analysis steps
-    setTimeout(() => setCurrentStep(2), 2000);
-    setTimeout(() => setCurrentStep(3), 4000);
-    setTimeout(() => {
-      setResults({
-        authenticity: 94,
-        manipulated: false,
-        confidence: "High",
-        findings: [
-          { type: "Metadata", status: "valid", detail: "EXIF data consistent" },
-          { type: "Noise Analysis", status: "valid", detail: "Uniform noise pattern" },
-          { type: "ELA", status: "warning", detail: "Minor compression artifacts detected" },
-          { type: "Deepfake", status: "valid", detail: "No AI manipulation detected" }
-        ]
-      });
+    setResults(null);
+
+    // Initial delay for UX (Scanning step)
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    setCurrentStep(2);
+
+    try {
+      let data;
+      
+      switch (selectedType) {
+        case "image":
+          if (files.length > 0) data = await analyzeImage(files[0]);
+          break;
+        case "video":
+           if (files.length > 0) data = await analyzeVideo(files[0]);
+          break;
+        case "audio":
+           if (files.length > 0) data = await analyzeAudio(files[0]);
+          break;
+         case "document":
+           if (files.length > 0) data = await analyzeDocument(files[0]);
+           break;
+        case "text":
+          // Assuming there's a text input state elsewhere, or we handle file as text source
+          // For now, let's keep it simple or prompt user - implementing generic fallback
+           break;
+        case "email":
+           break;
+        default:
+          break;
+      }
+
+      if (data) {
+        // Transform backend response to UI format
+        // Backend returns: { trust_score, deepfake_probability, verdict, explanation, details: { findings: [], ...categoryScores } }
+        
+        // Map backend findings to UI findings
+        const findings = data.details?.findings || [];
+        const mappedFindings = findings.map((f: any) => ({
+             type: f.category || "General",
+             status: f.score > 80 ? "valid" : f.score > 50 ? "warning" : "danger",
+             detail: f.reason || "Analysis complete"
+        }));
+
+        // Fallback findings if empty
+        if (mappedFindings.length === 0) {
+             mappedFindings.push({
+                 type: "Analysis Complete",
+                 status: data.trust_score > 80 ? "valid" : data.trust_score > 50 ? "warning" : "danger",
+                 detail: data.explanation || "Forensic analysis completed successfully"
+             });
+        }
+
+        // Extract category scores (texture, lighting, anatomy, background, semantics, etc.)
+        const categoryScores: Record<string, number> = {};
+        if (data.details) {
+          Object.keys(data.details).forEach(key => {
+            if (key !== 'findings' && typeof data.details[key] === 'number') {
+              categoryScores[key] = data.details[key];
+            }
+          });
+        }
+
+        const uiResults = {
+            authenticity: data.trust_score,
+            aiPercentage: data.deepfake_probability,
+            verdict: data.verdict,
+            explanation: data.explanation,
+            manipulated: data.deepfake_probability > 50,
+            confidence: data.trust_score > 80 ? "High" : data.trust_score > 50 ? "Medium" : "Low",
+            categoryScores: categoryScores,
+            findings: mappedFindings
+        };
+
+        setCurrentStep(3);
+        await new Promise(resolve => setTimeout(resolve, 500));
+        setResults(uiResults);
+      }
+      
+    } catch (error) {
+      console.error("Analysis failed:", error);
+      alert("Analysis failed. Please check backend connection.");
+    } finally {
       setIsAnalyzing(false);
-    }, 6000);
+    }
   };
+
+  // Helper for text/email input (can be expanded later)
+  // For now we focus on file uploads as per UI
 
   return (
     <div className="max-w-5xl mx-auto space-y-8">
@@ -271,43 +346,98 @@ export default function AnalyzePage() {
           animate={{ opacity: 1, y: 0 }}
           className="space-y-6"
         >
-          {/* Overall Score */}
-          <div className="p-8 bg-gradient-to-br from-emerald-500/10 to-sky-500/10 border border-emerald-500/20 rounded-2xl text-center">
-            <div className="w-24 h-24 mx-auto mb-4 rounded-full bg-emerald-500/20 border-4 border-emerald-500 flex items-center justify-center">
-              <span className="text-3xl font-bold text-emerald-400">{results.authenticity}%</span>
+          {/* Authenticity vs AI Percentage Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Authenticity Card */}
+            <div className="p-8 bg-gradient-to-br from-emerald-500/10 to-sky-500/10 border border-emerald-500/20 rounded-2xl text-center">
+              <div className="w-24 h-24 mx-auto mb-4 rounded-full bg-emerald-500/20 border-4 border-emerald-500 flex items-center justify-center">
+                <span className="text-3xl font-bold text-emerald-400">{results.authenticity}%</span>
+              </div>
+              <h3 className="text-xl font-bold text-white mb-1">Authentic Content</h3>
+              <p className="text-emerald-400 font-medium">{results.confidence} Confidence</p>
             </div>
-            <h2 className="text-2xl font-bold text-white mb-2">Authentic Content</h2>
-            <p className="text-emerald-400 font-medium">High Confidence Verification</p>
+
+            {/* AI Generated Card */}
+            <div className="p-8 bg-gradient-to-br from-rose-500/10 to-orange-500/10 border border-rose-500/20 rounded-2xl text-center">
+              <div className="w-24 h-24 mx-auto mb-4 rounded-full bg-rose-500/20 border-4 border-rose-500 flex items-center justify-center">
+                <span className="text-3xl font-bold text-rose-400">{results.aiPercentage}%</span>
+              </div>
+              <h3 className="text-xl font-bold text-white mb-1">AI Generated</h3>
+              <p className="text-rose-400 font-medium">Deepfake Probability</p>
+            </div>
           </div>
 
-          {/* Detailed Findings */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {results.findings.map((finding: any, index: number) => (
-              <div
-                key={index}
-                className={`p-4 rounded-xl border ${
-                  finding.status === 'valid' ? 'bg-emerald-500/5 border-emerald-500/20' :
-                  finding.status === 'warning' ? 'bg-amber-500/5 border-amber-500/20' :
-                  'bg-rose-500/5 border-rose-500/20'
-                }`}
-              >
-                <div className="flex items-start gap-3">
-                  <div className={`mt-0.5 ${
-                    finding.status === 'valid' ? 'text-emerald-400' :
-                    finding.status === 'warning' ? 'text-amber-400' :
-                    'text-rose-400'
-                  }`}>
-                    {finding.status === 'valid' ? <CheckCircle2 className="w-5 h-5" /> :
-                     finding.status === 'warning' ? <AlertCircle className="w-5 h-5" /> :
-                     <Shield className="w-5 h-5" />}
+          {/* Verdict Badge */}
+          <div className="p-6 bg-slate-900/50 border border-slate-800 rounded-2xl text-center">
+            <div className="inline-flex items-center gap-2 px-6 py-3 bg-sky-500/10 border border-sky-500/30 rounded-full">
+              <Shield className="w-5 h-5 text-sky-400" />
+              <span className="text-lg font-bold text-sky-300">Verdict: {results.verdict}</span>
+            </div>
+            {results.explanation && (
+              <p className="mt-4 text-slate-300 max-w-2xl mx-auto">{results.explanation}</p>
+            )}
+          </div>
+
+          {/* Category Scores (if available) */}
+          {results.categoryScores && Object.keys(results.categoryScores).length > 0 && (
+            <div className="p-6 bg-slate-900/50 border border-slate-800 rounded-2xl">
+              <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                <Brain className="w-5 h-5 text-purple-400" />
+                Forensic Analysis Breakdown
+              </h3>
+              <div className="space-y-3">
+                {Object.entries(results.categoryScores).map(([category, score]: [string, any]) => (
+                  <div key={category}>
+                    <div className="flex justify-between text-sm mb-1">
+                      <span className="text-slate-300 capitalize">{category}</span>
+                      <span className="text-slate-400">{score}/100</span>
+                    </div>
+                    <div className="h-2 bg-slate-800 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-gradient-to-r from-sky-500 to-purple-500 rounded-full transition-all"
+                        style={{ width: `${score}%` }}
+                      />
+                    </div>
                   </div>
-                  <div>
-                    <h4 className="font-medium text-white">{finding.type}</h4>
-                    <p className="text-sm text-slate-400">{finding.detail}</p>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Detailed Findings */}
+          <div className="p-6 bg-slate-900/50 border border-slate-800 rounded-2xl">
+            <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+              <FileSearch className="w-5 h-5 text-amber-400" />
+              Detailed Findings
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {results.findings.map((finding: any, index: number) => (
+                <div
+                  key={index}
+                  className={`p-4 rounded-xl border ${
+                    finding.status === 'valid' ? 'bg-emerald-500/5 border-emerald-500/20' :
+                    finding.status === 'warning' ? 'bg-amber-500/5 border-amber-500/20' :
+                    'bg-rose-500/5 border-rose-500/20'
+                  }`}
+                >
+                  <div className="flex items-start gap-3">
+                    <div className={`mt-0.5 ${
+                      finding.status === 'valid' ? 'text-emerald-400' :
+                      finding.status === 'warning' ? 'text-amber-400' :
+                      'text-rose-400'
+                    }`}>
+                      {finding.status === 'valid' ? <CheckCircle2 className="w-5 h-5" /> :
+                       finding.status === 'warning' ? <AlertCircle className="w-5 h-5" /> :
+                       <Shield className="w-5 h-5" />}
+                    </div>
+                    <div>
+                      <h4 className="font-medium text-white">{finding.type}</h4>
+                      <p className="text-sm text-slate-400">{finding.detail}</p>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
 
           {/* Action Buttons */}
